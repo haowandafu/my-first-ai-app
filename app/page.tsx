@@ -16,54 +16,118 @@ export default function Home() {
 
   const recognitionRef = useRef<any>(null);
 
+  // Initialize Speech Recognition on mount (checking support only)
   useEffect(() => {
-    // Initialize Speech Recognition
     if (typeof window !== "undefined") {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (SpeechRecognition) {
-        recognitionRef.current = new SpeechRecognition();
-        recognitionRef.current.continuous = true;
-        recognitionRef.current.interimResults = true;
-        recognitionRef.current.lang = "zh-CN"; // Set to Chinese
-
-        recognitionRef.current.onresult = (event: any) => {
-          let finalTranscript = "";
-          for (let i = event.resultIndex; i < event.results.length; ++i) {
-            if (event.results[i].isFinal) {
-              finalTranscript += event.results[i][0].transcript;
-            }
-          }
-          if (finalTranscript) {
-            setTranscript((prev) => prev + finalTranscript);
-          }
-        };
-
-        recognitionRef.current.onerror = (event: any) => {
-          console.error("Speech recognition error", event.error);
-          setError(event.error);
-          setIsRecording(false);
-        };
-        
-        recognitionRef.current.onend = () => {
-             // Do nothing specific on end
-        };
-      } else {
-        setError("Browser does not support Speech Recognition.");
+      if (!SpeechRecognition) {
+        setError("Your browser does not support Speech Recognition. Please try Chrome or Safari.");
       }
     }
-  }, []); // Remove isRecording dependency to prevent re-initialization
+  }, []);
+
+  const getErrorMessage = (event: any) => {
+      const error = event.error;
+      switch (error) {
+          case 'not-allowed':
+              return 'Microphone permission denied. Please allow microphone access in your browser settings.';
+          case 'no-speech':
+              return 'No speech detected. Please try again.';
+          case 'audio-capture':
+              return 'No microphone was found. Ensure that a microphone is installed and that microphone settings are configured correctly.';
+          case 'network':
+              return 'Network communication required for completing the recognition failed.';
+          case 'aborted':
+              return 'Speech recognition was aborted. Please try again.';
+          case 'service-not-allowed':
+              return 'Speech recognition service is not allowed. Please ensure you are online and have permission.';
+          default:
+              return `Speech recognition error: ${error}`;
+      }
+  };
+
+  const startRecording = () => {
+    setError(null);
+    setTranscript("");
+    setTranslation("");
+
+    if (typeof window !== "undefined") {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        
+        if (!SpeechRecognition) {
+             setError("Browser does not support Speech Recognition.");
+             return;
+        }
+
+        try {
+             // Re-initialize or reuse instance
+             if (!recognitionRef.current) {
+                 recognitionRef.current = new SpeechRecognition();
+                 recognitionRef.current.continuous = true;
+                 recognitionRef.current.interimResults = true;
+                 recognitionRef.current.lang = "zh-CN";
+             }
+
+             // Bind events every time or ensure they are bound
+             recognitionRef.current.onresult = (event: any) => {
+                let finalTranscript = "";
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                  if (event.results[i].isFinal) {
+                    finalTranscript += event.results[i][0].transcript;
+                  }
+                }
+                if (finalTranscript) {
+                  setTranscript((prev) => prev + finalTranscript);
+                }
+             };
+
+             recognitionRef.current.onerror = (event: any) => {
+                console.error("Speech recognition error", event.error);
+                setError(getErrorMessage(event));
+                setIsRecording(false);
+                // Force stop if error occurs
+                try {
+                    recognitionRef.current?.stop();
+                } catch(e) {
+                    // ignore
+                }
+             };
+
+             recognitionRef.current.onend = () => {
+                if (isRecording) {
+                    // If it ended unexpectedly while we thought we were recording
+                     setIsRecording(false);
+                }
+             };
+
+             recognitionRef.current.start();
+             setIsRecording(true);
+
+        } catch (err) {
+            console.error("Failed to start recognition:", err);
+            setError("Failed to start recording. Please refresh and try again.");
+            setIsRecording(false);
+        }
+    }
+  };
+
+  const stopRecording = () => {
+      if (recognitionRef.current) {
+          try {
+            recognitionRef.current.stop();
+          } catch(e) {
+              console.error("Error stopping recognition:", e);
+          }
+      }
+      setIsRecording(false);
+      handleTranslate(transcript);
+  };
 
   const toggleRecording = () => {
     if (isRecording) {
-      recognitionRef.current?.stop();
-      setIsRecording(false);
-      handleTranslate(transcript);
+      stopRecording();
     } else {
-      setTranscript("");
-      setTranslation("");
-      setError(null);
-      recognitionRef.current?.start();
-      setIsRecording(true);
+      startRecording();
     }
   };
 
@@ -148,8 +212,8 @@ export default function Home() {
 
         {/* Status / Error */}
         {error && (
-            <div className="text-center text-destructive bg-destructive/10 p-2 rounded-md mx-auto max-w-md">
-                {error}
+            <div className="text-center text-destructive bg-destructive/10 p-2 rounded-md mx-auto max-w-md border border-destructive/20">
+                <p className="font-semibold text-sm">{error}</p>
             </div>
         )}
 
