@@ -5,13 +5,13 @@ import { Play, RotateCcw, Bell, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function Home() {
-  const DEFAULT_TIME = 3 * 60; // 3 minutes in seconds
+  const DEFAULT_TIME = 8; // Changed to 8 seconds
   const [timeLeft, setTimeLeft] = useState(DEFAULT_TIME);
   const [isActive, setIsActive] = useState(false);
   const [permission, setPermission] = useState<NotificationPermission>("default");
+  const [showMessage, setShowMessage] = useState(false);
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
 
   // Initialize Notification permission
   useEffect(() => {
@@ -27,58 +27,13 @@ export default function Home() {
     }
   };
 
-  const playBeep = useCallback(() => {
-    if (!audioContextRef.current) {
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-    }
-    const ctx = audioContextRef.current;
-    if (ctx.state === 'suspended') ctx.resume();
-
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.frequency.value = 440;
-    osc.type = 'sine';
-    gain.gain.setValueAtTime(0.5, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.5);
-  }, []);
-
   const handleComplete = useCallback(() => {
     setIsActive(false);
     if (intervalRef.current) clearInterval(intervalRef.current);
 
-    // Vibrate
-    if ("vibrate" in navigator) {
-      navigator.vibrate([200, 100, 200, 100, 400]);
-    }
-
-    // Notification
-    if (permission === "granted") {
-      try {
-        // Try Service Worker notification first (better for mobile background)
-        navigator.serviceWorker.ready.then((registration) => {
-          registration.showNotification("Time's Up!", {
-            body: "Your 3-minute focus session is complete.",
-            icon: "/icon.svg",
-            // @ts-ignore: vibrate is supported in ServiceWorker registration showNotification
-            vibrate: [200, 100, 200],
-          });
-        });
-      } catch (e) {
-        // Fallback to standard notification
-        new Notification("Time's Up!", {
-          body: "Your 3-minute focus session is complete.",
-          icon: "/icon.svg",
-        });
-      }
-    }
-    
-    // Play sound via Web Audio API (backup for vibrate)
-    playBeep();
-  }, [permission, playBeep]);
+    // Show text instead of vibration/notification
+    setShowMessage(true);
+  }, []);
 
   // Timer logic
   useEffect(() => {
@@ -98,21 +53,15 @@ export default function Home() {
   const toggleTimer = () => {
     if (!isActive && timeLeft === 0) {
       setTimeLeft(DEFAULT_TIME);
+      setShowMessage(false);
     }
     setIsActive(!isActive);
-    
-    // Unlock AudioContext on user interaction
-    if (!audioContextRef.current) {
-        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-    }
-    if (audioContextRef.current.state === 'suspended') {
-        audioContextRef.current.resume();
-    }
   };
 
   const resetTimer = () => {
     setIsActive(false);
     setTimeLeft(DEFAULT_TIME);
+    setShowMessage(false);
     if (intervalRef.current) clearInterval(intervalRef.current);
   };
 
@@ -181,12 +130,22 @@ export default function Home() {
           </svg>
           
           <div className="absolute text-center">
-            <h1 className="text-7xl font-light tracking-tighter tabular-nums">
-              {formatTime(timeLeft)}
-            </h1>
-            <p className="text-white/40 mt-2 text-sm uppercase tracking-widest">
-              {isActive ? "Focusing..." : timeLeft === 0 ? "Done" : "Ready"}
-            </p>
+            {showMessage ? (
+              <div className="px-4 animate-in fade-in zoom-in duration-500">
+                <h1 className="text-3xl font-bold text-pink-500 text-center leading-relaxed">
+                  王媛媛<br/>你真好看！
+                </h1>
+              </div>
+            ) : (
+              <>
+                <h1 className="text-7xl font-light tracking-tighter tabular-nums">
+                  {formatTime(timeLeft)}
+                </h1>
+                <p className="text-white/40 mt-2 text-sm uppercase tracking-widest">
+                  {isActive ? "Focusing..." : timeLeft === 0 ? "Done" : "Ready"}
+                </p>
+              </>
+            )}
           </div>
         </div>
 
