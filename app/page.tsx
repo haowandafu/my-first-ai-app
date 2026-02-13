@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Play, RotateCcw, Bell, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -27,22 +27,26 @@ export default function Home() {
     }
   };
 
-  // Timer logic
-  useEffect(() => {
-    if (isActive && timeLeft > 0) {
-      intervalRef.current = setInterval(() => {
-        setTimeLeft((prev) => prev - 1);
-      }, 1000);
-    } else if (timeLeft === 0) {
-      handleComplete();
+  const playBeep = useCallback(() => {
+    if (!audioContextRef.current) {
+      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
     }
+    const ctx = audioContextRef.current;
+    if (ctx.state === 'suspended') ctx.resume();
 
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [isActive, timeLeft]);
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = 440;
+    osc.type = 'sine';
+    gain.gain.setValueAtTime(0.5, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.5);
+  }, []);
 
-  const handleComplete = () => {
+  const handleComplete = useCallback(() => {
     setIsActive(false);
     if (intervalRef.current) clearInterval(intervalRef.current);
 
@@ -73,26 +77,22 @@ export default function Home() {
     
     // Play sound via Web Audio API (backup for vibrate)
     playBeep();
-  };
+  }, [permission, playBeep]);
 
-  const playBeep = () => {
-    if (!audioContextRef.current) {
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+  // Timer logic
+  useEffect(() => {
+    if (isActive && timeLeft > 0) {
+      intervalRef.current = setInterval(() => {
+        setTimeLeft((prev) => prev - 1);
+      }, 1000);
+    } else if (timeLeft === 0) {
+      handleComplete();
     }
-    const ctx = audioContextRef.current;
-    if (ctx.state === 'suspended') ctx.resume();
 
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.frequency.value = 440;
-    osc.type = 'sine';
-    gain.gain.setValueAtTime(0.5, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.5);
-  };
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [isActive, timeLeft, handleComplete]);
 
   const toggleTimer = () => {
     if (!isActive && timeLeft === 0) {
@@ -224,7 +224,7 @@ export default function Home() {
             <Smartphone className="w-4 h-4" />
             <span>Install App</span>
         </p>
-        <p>Tap "Share" {'>'} "Add to Home Screen"</p>
+        <p>Tap &quot;Share&quot; {'>'} &quot;Add to Home Screen&quot;</p>
       </div>
     </main>
   );
