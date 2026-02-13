@@ -63,6 +63,7 @@ export default function Home() {
           registration.showNotification("Time's Up!", {
             body: "Your 3-minute focus session is complete.",
             icon: "/icon.svg",
+            // @ts-ignore: vibrate is supported in ServiceWorker registration showNotification
             vibrate: [200, 100, 200],
           });
         });
